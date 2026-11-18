@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作業訂正小幫手 - 5年7班大屏同步系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #061329;
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        /* 深藍電路板科技感背景 (參考 chunsheng612.github.io/revisionsystem) */
+        .circuit-bg {
+            background-color: #061329;
+            background-image: 
+                radial-gradient(circle at 20% 25%, rgba(14, 165, 233, 0.14) 0%, transparent 48%),
+                radial-gradient(circle at 80% 75%, rgba(37, 99, 235, 0.16) 0%, transparent 48%),
+                url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%231e3a8a' stroke-width='1.2' stroke-opacity='0.38'%3E%3Cpath d='M0 20h30l15 15h45l15-15h15'/%3E%3Cpath d='M0 90h20l15-15h50l15 15h20'/%3E%3Cpath d='M45 0v35M75 120V75'/%3E%3Ccircle cx='30' cy='20' r='2.5' fill='%230ea5e9' fill-opacity='0.45'/%3E%3Ccircle cx='90' cy='35' r='2.5' fill='%230ea5e9' fill-opacity='0.45'/%3E%3Ccircle cx='35' cy='75' r='2.5' fill='%230ea5e9' fill-opacity='0.45'/%3E%3Ccircle cx='85' cy='75' r='2.5' fill='%230ea5e9' fill-opacity='0.45'/%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        /* 科技感深藍毛玻璃卡片 */
+        .glass-panel {
+            background: rgba(13, 27, 52, 0.86);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        }
+
+        /* 總覽作業列卡片懸停特效 */
+        .overview-card {
+            transition: all 0.2s ease;
+        }
+        .overview-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.55);
+            box-shadow: 0 14px 30px -6px rgba(2, 132, 199, 0.25);
+        }
+
+        /* 座號方塊按鈕 */
+        .seat-btn {
+            transition: all 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .seat-btn:active {
+            transform: scale(0.92);
+        }
+
+        /* 已訂正完成 (飽和綠色 + 右上角打勾) */
+        .seat-done {
+            background: linear-gradient(145deg, #28c76f, #1eae5d);
+            border: 1px solid #4ade80;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(40, 199, 111, 0.35);
+        }
+
+        /* 未訂正 / 需訂正 (高對比亮橘紅) */
+        .seat-pending {
+            background: linear-gradient(145deg, #f97316, #ea580c);
+            border: 2px solid #fdba74;
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(249, 115, 22, 0.45);
+        }
+
+        /* 自訂捲軸 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #07152e; }
+        ::-webkit-scrollbar-thumb { background: #1d4ed8; border-radius: 4px; }
+    </style>
+</head>
+<body class="circuit-bg min-h-screen flex flex-col">
+
+    <!-- 頂部系統狀態與教室設定列 -->
+    <header id="top-navbar" class="sticky top-0 z-30 glass-panel border-b border-sky-500/25 px-4 py-2.5">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <!-- 左側：班級識別與同步狀態 -->
+            <div class="flex items-center gap-3">
+                <button onclick="switchView('overview')" class="flex items-center gap-2.5 text-left group">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/25 group-hover:scale-105 transition">
+                        <i class="fa-solid fa-clipboard-check text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-black text-base md:text-lg text-white tracking-wide">作業訂正小幫手</span>
+                            <span id="sync-status-badge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>連線中
+                            </span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+
+            <!-- 右側：教室代碼、班級人數、大屏雙欄模式入口 -->
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- 教室代碼 -->
+                <div class="flex items-center bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-1">
+                    <i class="fa-solid fa-wifi text-sky-400 text-xs mr-1.5"></i>
+                    <span class="text-xs text-slate-400 mr-1 hidden sm:inline">教室代碼:</span>
+                    <input type="text" id="room-code-input" value="507" maxlength="10"
+                        class="w-14 bg-transparent text-white font-black text-xs md:text-sm text-center uppercase border-b border-dashed border-sky-400 focus:outline-none">
+                    <button onclick="changeRoomCode()" class="ml-1.5 text-xs bg-sky-600/80 hover:bg-sky-500 text-white px-2 py-0.5 rounded-lg font-bold transition">
+                        同步
+                    </button>
+                </div>
+
+                <!-- 班級人數 (預設 5年7班 28人，支援 15~42 人) -->
+                <div class="flex items-center bg-slate-900/90 border border-slate-700 rounded-xl px-2.5 py-1">
+                    <i class="fa-solid fa-users text-emerald-400 text-xs mr-1.5"></i>
+                    <span class="text-xs text-slate-400 mr-1 hidden sm:inline">人數:</span>
+                    <select id="class-size-select" onchange="updateClassSize(this.value)"
+                        class="bg-slate-800 text-white font-bold text-xs md:text-sm rounded-lg px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-sky-400">
+                    </select>
+                </div>
+
+                <!-- 切換至教室大屏雙欄展示模式 -->
+                <button onclick="switchView('bigscreen')"
+                    class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl shadow-lg shadow-indigo-600/30 transition text-xs md:text-sm">
+                    <i class="fa-solid fa-tv"></i>
+                    <span>大屏雙欄展示 (<span id="nav-pinned-count">0</span>/2)</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 純淨大屏模式下專屬懸浮控制列 (平時隱藏) -->
+    <div id="clean-projector-bar" class="hidden fixed top-3 right-4 z-50 flex items-center gap-3 bg-slate-900/90 backdrop-blur-md border border-sky-500/40 px-4 py-2 rounded-full shadow-2xl">
+        <span class="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            教室 <strong id="floating-room-label" class="text-white">507</strong>
+        </span>
+        <div class="h-3.5 w-[1px] bg-slate-700"></div>
+        <button onclick="toggleCleanProjector()" class="text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1">
+            <i class="fa-solid fa-eye"></i> 顯示工具列
+        </button>
+        <div class="h-3.5 w-[1px] bg-slate-700"></div>
+        <button onclick="exitCleanAndGoOverview()" class="text-xs font-bold text-sky-300 hover:text-white flex items-center gap-1">
+            <i class="fa-solid fa-house"></i> 作業總覽
+        </button>
+    </div>
+
+    <!-- 主內容區 -->
+    <main id="main-container" class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 md:py-8 flex flex-col transition-all duration-300">
+
+        <!-- ========================================================= -->
+        <!-- 視圖 A：首頁「作業總覽」 (預設進入畫面，參考附件截圖設計)   -->
+        <!-- ========================================================= -->
+        <section id="view-overview" class="flex-1 flex flex-col">
+            <!-- 頂部大標題與雙行動按鈕 (參考截圖：左側「作業總覽」，右側黃色「查看總訂正名單」+ 亮藍色「新增作業」) -->
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-7">
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-black text-white tracking-wide">作業總覽</h1>
+                    <p class="text-xs md:text-sm text-sky-300/75 mt-1">點擊作業卡片可進入座號訂正畫面；開啟「大屏顯示」可同步投影（最多 2 項）</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- 醒目黃色圓角按鈕：查看總訂正名單 -->
+                    <button onclick="switchView('summary')"
+                        class="bg-[#facc15] hover:bg-[#fde047] active:scale-95 text-slate-950 font-black px-5 py-3 rounded-2xl shadow-lg shadow-yellow-500/25 transition flex items-center gap-2 text-sm md:text-base">
+                        <i class="fa-solid fa-list-ol"></i>
+                        <span>查看總訂正名單</span>
+                        <span id="overview-pending-students-badge" class="bg-slate-950 text-[#facc15] text-xs font-black px-2 py-0.5 rounded-full">0人</span>
+                    </button>
+
+                    <!-- 亮藍色圓角按鈕：新增作業 -->
+                    <button onclick="openAddModal()"
+                        class="bg-[#0ea5e9] hover:bg-[#38bdf8] active:scale-95 text-white font-black px-5 py-3 rounded-2xl shadow-lg shadow-sky-500/30 transition flex items-center gap-2 text-sm md:text-base">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>新增作業</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 搜尋與篩選列 -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-2 text-xs md:text-sm text-slate-300">
+                    <span class="px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 font-bold">
+                        共 <strong id="total-hw-count" class="text-white">0</strong> 項作業紀錄
+                    </span>
+                    <span class="px-3 py-1 rounded-full bg-sky-950/80 border border-sky-500/40 text-sky-300 font-bold">
+                        大屏已選：<strong id="overview-pinned-count" class="text-white">0</strong> / 2 項
+                    </span>
+                </div>
+
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="overview-search" oninput="renderOverviewList()" placeholder="搜尋作業名稱或日期..."
+                        class="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-sky-400">
+                </div>
+            </div>
+
+            <!-- 所有作業卡片列表 -->
+            <div id="overview-list" class="space-y-3.5">
+                <!-- JS 動態生成作業卡片 -->
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- 視圖 D：單科座號訂正明細頁 (點擊任一作業卡片進入，對照首圖) -->
+        <!-- ========================================================= -->
+        <section id="view-detail" class="hidden flex-1 flex flex-col">
+            <!-- 頂部作業名稱框與返回總覽按鈕 (參考首圖格局) -->
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div class="glass-panel px-6 py-3.5 rounded-2xl border border-sky-400/35 flex flex-wrap items-center gap-3 md:gap-4">
+                    <h2 id="detail-hw-title" class="text-2xl md:text-3xl font-black text-white tracking-wide">國語習作(七)</h2>
+                    <span id="detail-hw-pages" class="px-3 py-1 rounded-xl bg-indigo-500/25 border border-indigo-400/40 text-indigo-200 text-xs md:text-sm font-bold">P.42-45</span>
+                    <span id="detail-hw-date" class="text-xs md:text-sm text-slate-400 font-bold">2026/11/18</span>
+                    <span id="detail-hw-badge" class="px-3.5 py-1 rounded-full text-xs md:text-sm font-black bg-[#facc15] text-slate-950">2 人未訂正</span>
+                </div>
+
+                <div class="flex items-center gap-2.5">
+                    <!-- 大屏顯示切換鈕 -->
+                    <button id="detail-pin-btn" onclick="toggleDetailPin()"
+                        class="px-4 py-2.5 rounded-xl font-bold text-sm border transition flex items-center gap-2 bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700">
+                        <i class="fa-solid fa-tv"></i>
+                        <span id="detail-pin-text">加入大屏顯示</span>
+                    </button>
+
+                    <!-- 返回總覽按鈕 (參考首圖右上角) -->
+                    <button onclick="switchView('overview')"
+                        class="px-5 py-2.5 rounded-xl bg-slate-700/90 hover:bg-slate-600 border border-slate-500/50 text-white font-bold text-sm transition flex items-center gap-2 shadow-lg">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>返回總覽</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 中央大尺寸座號方塊面板 (參考首圖 7 欄圓角方塊排版) -->
+            <div class="glass-panel rounded-3xl p-5 md:p-8 max-w-4xl w-full mx-auto">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-700/70">
+                    <div class="flex items-center gap-4 text-xs md:text-sm font-bold">
+                        <span class="flex items-center gap-1.5 text-emerald-400">
+                            <span class="w-4 h-4 rounded bg-[#28c76f] inline-flex items-center justify-center text-[10px] text-white"><i class="fa-solid fa-check"></i></span>
+                            已訂正完成
+                        </span>
+                        <span class="flex items-center gap-1.5 text-orange-400">
+                            <span class="w-4 h-4 rounded bg-orange-500 inline-block"></span>
+                            未訂正 (點擊座號切換狀態)
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="batchCurrentDetailSeats(true)" class="text-xs bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-lg font-bold transition">
+                            全班設為已訂正
+                        </button>
+                        <button onclick="batchCurrentDetailSeats(false)" class="text-xs bg-orange-600/30 hover:bg-orange-600/50 border border-orange-500/40 text-orange-300 px-3 py-1.5 rounded-lg font-bold transition">
+                            全班設為未訂正
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 7 欄座號網格 -->
+                <div id="detail-seats-grid" class="grid grid-cols-5 sm:grid-cols-7 gap-3 md:gap-4">
+                    <!-- JS 動態生成 1號 ~ N號 -->
+                </div>
+            </div>
+
+            <!-- 底部刪除此作業按鈕 (參考首圖右下角紅色刪除按鈕) -->
+            <div class="max-w-4xl w-full mx-auto mt-5 flex justify-end">
+                <button onclick="askDeleteCurrentDetailHomework()"
+                    class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-lg shadow-rose-600/30 transition flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>刪除此作業</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- 視圖 B：「查看總訂正名單」彙整看板 (按座號彙整所有缺交作業) -->
+        <!-- ========================================================= -->
+        <section id="view-summary" class="hidden flex-1 flex flex-col">
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                    <div class="flex items-center gap-3">
+                        <h1 class="text-2xl md:text-3xl font-black text-white">總訂正名單彙整</h1>
+                        <span id="summary-total-badge" class="px-3.5 py-1 rounded-full bg-[#facc15] text-slate-950 font-black text-sm">
+                            共 0 人尚有未訂正
+                        </span>
+                    </div>
+                    <p class="text-xs md:text-sm text-sky-300/80 mt-1">依座號排序彙整所有尚未訂正的作業。點擊作業標籤可直接一鍵銷帳（標記為已訂正）！</p>
+                </div>
+
+                <button onclick="switchView('overview')"
+                    class="px-5 py-2.5 rounded-xl bg-slate-700/90 hover:bg-slate-600 border border-slate-500/50 text-white font-bold text-sm transition flex items-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>返回作業總覽</span>
+                </button>
+            </div>
+
+            <!-- 按座號排列的缺交學生卡片網格 -->
+            <div id="summary-students-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- JS 動態生成每位未完成學生的卡片 -->
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- 視圖 C：「教室大屏雙欄展示模式」 (最多同時顯示 2 種作業)   -->
+        <!-- ========================================================= -->
+        <section id="view-bigscreen" class="hidden flex-1 flex flex-col">
+            <!-- 大屏模式頂部控制列 -->
+            <div id="bigscreen-header-bar" class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3">
+                    <span class="px-3 py-1 rounded-xl bg-sky-500/20 border border-sky-400/40 text-sky-300 font-black text-sm">
+                        <i class="fa-solid fa-tv mr-1.5"></i>教室大屏左右雙欄看板（最多同時顯示 2 項）
+                    </span>
+                    <div class="hidden sm:flex items-center gap-3 text-xs font-bold">
+                        <span class="flex items-center gap-1.5 text-emerald-400">
+                            <span class="w-3.5 h-3.5 rounded bg-[#28c76f] inline-flex items-center justify-center text-[9px] text-white"><i class="fa-solid fa-check"></i></span>已訂正
+                        </span>
+                        <span class="flex items-center gap-1.5 text-orange-400">
+                            <span class="w-3.5 h-3.5 rounded bg-orange-500 inline-block"></span>待訂正
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleCleanProjector()"
+                        class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 font-bold text-xs md:text-sm transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-expand"></i>
+                        <span>純淨投影 (隱藏工具列)</span>
+                    </button>
+                    <button onclick="switchView('overview')"
+                        class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs md:text-sm transition flex items-center gap-1.5 shadow-lg">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>返回作業總覽</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 左右雙欄並排容器 (1項時置中放大，2項時嚴格左右兩側 50% / 50% 並排) -->
+            <div id="bigscreen-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 flex-1 items-stretch">
+                <!-- JS 動態生成最多 2 張左右並排大屏作業看板 -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 頁尾識別 -->
+    <footer id="app-footer" class="py-4 text-center">
+        <span class="inline-block px-4 py-1.5 rounded-full bg-slate-900/80 border border-slate-700/70 text-xs text-slate-400 font-medium">
+            CREATED BY GarbageN9
+        </span>
+    </footer>
+
+    <!-- ========================================================= -->
+    <!-- 新增作業 Modal 彈窗                                       -->
+    <!-- ========================================================= -->
+    <div id="add-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel rounded-3xl max-w-lg w-full p-6 border border-sky-400/40 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-3 mb-5">
+                <h3 class="text-xl font-black text-white flex items-center gap-2">
+                    <i class="fa-solid fa-circle-plus text-[#0ea5e9]"></i>
+                    新增訂正 / 作業項目
+                </h3>
+                <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-xl w-8 h-8 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleCreateHomework(event)" class="space-y-4">
+                <!-- 主名稱 + 常用科目快捷標籤 -->
+                <div>
+                    <label class="block text-sm font-bold text-sky-200 mb-1.5">作業主名稱 <span class="text-rose-400">*</span></label>
+                    <input type="text" id="hw-title" required placeholder="例如：國語習作(七)"
+                        class="w-full bg-slate-900/95 border border-slate-600 rounded-xl px-4 py-2.5 text-white font-bold focus:outline-none focus:border-sky-400">
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                        <button type="button" onclick="quickFillTitle('國語習作')" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1 rounded-lg border border-slate-600 font-bold">國語習作</button>
+                        <button type="button" onclick="quickFillTitle('數學習作')" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1 rounded-lg border border-slate-600 font-bold">數學習作</button>
+                        <button type="button" onclick="quickFillTitle('國語重點')" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1 rounded-lg border border-slate-600 font-bold">國語重點</button>
+                        <button type="button" onclick="quickFillTitle('數練')" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1 rounded-lg border border-slate-600 font-bold">數練</button>
+                        <button type="button" onclick="quickFillTitle('社會習作')" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1 rounded-lg border border-slate-600 font-bold">社會習作</button>
+                    </div>
+                </div>
+
+                <!-- 頁數與日期 -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-bold text-sky-200 mb-1.5">頁數 / 範圍</label>
+                        <input type="text" id="hw-pages" placeholder="例如：P.20-21"
+                            class="w-full bg-slate-900/95 border border-slate-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-400">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-sky-200 mb-1.5">日期</label>
+                        <input type="date" id="hw-date" required
+                            class="w-full bg-slate-900/95 border border-slate-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-400">
+                    </div>
+                </div>
+
+                <!-- 初始狀態 -->
+                <div>
+                    <label class="block text-sm font-bold text-sky-200 mb-1.5">建立時的初始座號狀態</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="initial-status" value="all_done" checked class="peer sr-only">
+                            <div class="p-3 rounded-xl border border-slate-600 bg-slate-900/80 peer-checked:border-emerald-400 peer-checked:bg-emerald-950/50 transition">
+                                <div class="font-bold text-emerald-400 text-sm flex items-center gap-1.5">
+                                    <i class="fa-solid fa-check-circle"></i> 預設全班已訂正
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-1">適合勾選出少數需訂正座號</p>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="initial-status" value="all_pending" class="peer sr-only">
+                            <div class="p-3 rounded-xl border border-slate-600 bg-slate-900/80 peer-checked:border-orange-400 peer-checked:bg-orange-950/50 transition">
+                                <div class="font-bold text-orange-400 text-sm flex items-center gap-1.5">
+                                    <i class="fa-solid fa-clock"></i> 預設全班未訂正
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-1">適合交一本點一號過關</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 立即加入大屏顯示 -->
+                <div class="flex items-center justify-between bg-slate-900/70 px-4 py-3 rounded-xl border border-slate-700">
+                    <div>
+                        <span class="text-sm font-bold text-slate-200 block">立即加入大屏雙欄顯示</span>
+                        <span class="text-[11px] text-slate-400">大屏最多同時顯示 2 項（已滿將自動替換較舊一項）</span>
+                    </div>
+                    <input type="checkbox" id="hw-pin-now" checked class="w-5 h-5 accent-sky-500 rounded cursor-pointer">
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeAddModal()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition">
+                        取消
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-[#0ea5e9] hover:bg-[#38bdf8] text-white font-black shadow-lg transition">
+                        建立作業
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 自訂確認刪除 Modal (絕不使用原生 confirm/alert) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel rounded-2xl max-w-sm w-full p-6 border border-rose-500/40 text-center shadow-2xl">
+            <div class="w-14 h-14 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-3 text-2xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirm-title" class="text-lg font-black text-white mb-1">確定要刪除此作業嗎？</h3>
+            <p class="text-sm text-slate-400 mb-5">刪除後該項作業的訂正紀錄將無法復原。</p>
+            <div class="flex justify-center gap-3">
+                <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm">取消</button>
+                <button id="confirm-ok-btn" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-lg">確定刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 訊息通知區 -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Firebase SDK 與應用程式核心邏輯 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 應用程式狀態
+        const state = {
+            db: null,
+            auth: null,
+            user: null,
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'homework-revision-507',
+            roomCode: '507',
+            classSize: 28, // 預設 5年7班 28人
+            currentView: 'overview', // 'overview' | 'detail' | 'summary' | 'bigscreen'
+            selectedDetailHwId: null,
+            isCleanProjector: false,
+            homeworks: [],
+            unsubHomeworks: null,
+            unsubSettings: null
+        };
+
+        // 初始化 UI 控制項
+        function initUIControls() {
+            const select = document.getElementById('class-size-select');
+            for (let i = 15; i <= 42; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `${i}人`;
+                if (i === state.classSize) opt.selected = true;
+                select.appendChild(opt);
+            }
+
+            // 預設日期為今日 (2026-11-18 或系統今日)
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('hw-date').value = today;
+        }
+
+        // Toast 訊息提示
+        window.showToast = function(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const styles = {
+                success: 'bg-emerald-600/95 border-emerald-400 text-white',
+                warning: 'bg-amber-500/95 border-amber-300 text-slate-950',
+                error: 'bg-rose-600/95 border-rose-400 text-white',
+                info: 'bg-sky-600/95 border-sky-300 text-white'
+            };
+            const icons = {
+                success: 'fa-circle-check',
+                warning: 'fa-triangle-exclamation',
+                error: 'fa-circle-xmark',
+                info: 'fa-circle-info'
+            };
+            toast.className = `flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-xl text-sm font-black backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 ${styles[type]}`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span>${message}</span>`;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2600);
+        };
+
+        // 初始化 Firebase 與身分驗證
+        async function initFirebase() {
+    try {
+        const firebaseConfig = {
+            apiKey: "AIzaSyBZFZZSgAwL5iIsyBR68mPrcJa1Wft5Fsw",
+            authDomain: "homework-helper-7159a.firebaseapp.com",
+            projectId: "homework-helper-7159a",
+            storageBucket: "homework-helper-7159a.firebasestorage.app",
+            messagingSenderId: "650882052779",
+            appId: "1:650882052779:web:ac44cac82de3d1a9eb7dee",
+            measurementId: "G-X8DXPFHXLE"
+        };
+        const app = initializeApp(firebaseConfig);
+        state.auth = getAuth(app);
+        state.db = getFirestore(app);
+
+        const cred = await signInAnonymously(state.auth);
+        state.user = cred.user;
+
+        setSyncBadge(true);
+        subscribeToRoom(state.roomCode);
+    } catch (err) {
+        console.error('Firebase 連線失敗:', err);
+        setSyncBadge(false);
+        showToast('雲端連線失敗，請檢查網路狀態', 'error');
+    }
+}
+
+        function setSyncBadge(online) {
+            const badge = document.getElementById('sync-status-badge');
+            if (online) {
+                badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>即時同步中`;
+            } else {
+                badge.className = 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>離線`;
+            }
+        }
+
+        // 訂閱指定教室代碼的即時資料
+        function subscribeToRoom(roomCode) {
+            if (!state.user || !state.db) return;
+            if (state.unsubHomeworks) state.unsubHomeworks();
+            if (state.unsubSettings) state.unsubSettings();
+
+            const cleanRoom = roomCode.trim().toUpperCase() || '507';
+            state.roomCode = cleanRoom;
+            document.getElementById('room-code-input').value = cleanRoom;
+            document.getElementById('floating-room-label').textContent = cleanRoom;
+
+            // 1. 教室人數設定同步
+            const configRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${cleanRoom}_meta`, 'config');
+            state.unsubSettings = onSnapshot(configRef, (snap) => {
+                if (snap.exists() && snap.data().classSize) {
+                    state.classSize = snap.data().classSize;
+                    document.getElementById('class-size-select').value = state.classSize;
+                    renderCurrentView();
+                } else {
+                    setDoc(configRef, { classSize: state.classSize }, { merge: true });
+                }
+            }, (err) => console.error('設定同步錯誤:', err));
+
+            // 2. 作業清單與訂正狀態即時同步
+            const hwColRef = collection(state.db, 'artifacts', state.appId, 'public', 'data', `room_${cleanRoom}_homeworks`);
+            state.unsubHomeworks = onSnapshot(hwColRef, async (snapshot) => {
+                const list = [];
+                snapshot.forEach((docSnap) => list.push({ id: docSnap.id, ...docSnap.data() }));
+
+                // 依建立時間新到舊排序
+                list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                state.homeworks = list;
+
+                // 若新教室無資料，自動建立一筆參考範例「國語習作(七)」
+                if (list.length === 0 && !snapshot.metadata.hasPendingWrites) {
+                    await seedDefaultHomework(cleanRoom);
+                    return;
+                }
+
+                renderCurrentView();
+            }, (err) => {
+                console.error('作業同步錯誤:', err);
+                showToast('資料同步發生錯誤', 'error');
+            });
+        }
+
+        // 建立初始示範作業 (對照截圖：國語習作(七)、2 人未訂正)
+        async function seedDefaultHomework(cleanRoom) {
+            const today = new Date().toISOString().split('T')[0];
+            const seats = {};
+            for (let i = 1; i <= state.classSize; i++) {
+                // 預設 7號、19號 尚未訂正 (共 2 人未訂正)
+                seats[i] = ![7, 19].includes(i);
+            }
+
+            const sampleRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${cleanRoom}_homeworks`, 'hw_sample_1');
+            await setDoc(sampleRef, {
+                title: '國語習作(七)',
+                pages: 'P.42-45',
+                date: today,
+                pinned: true,
+                seats,
+                createdAt: Date.now()
+            });
+        }
+
+        // 切換教室代碼
+        window.changeRoomCode = function() {
+            const val = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (!val) return showToast('請輸入教室代碼', 'warning');
+            subscribeToRoom(val);
+            showToast(`已連線至教室代碼「${val}」`, 'success');
+        };
+
+        // 更新班級人數
+        window.updateClassSize = async function(val) {
+            const size = parseInt(val, 10);
+            state.classSize = size;
+            renderCurrentView();
+            if (!state.user || !state.db) return;
+            const configRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_meta`, 'config');
+            await setDoc(configRef, { classSize: size }, { merge: true });
+            showToast(`已調整班級人數為 ${size} 人`, 'success');
+        };
+
+        // 切換主要視圖 ('overview' | 'detail' | 'summary' | 'bigscreen')
+        window.switchView = function(viewName) {
+            state.currentView = viewName;
+            ['overview', 'detail', 'summary', 'bigscreen'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                if (v === viewName) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            });
+
+            // 進入大屏模式時放寬主容器至全寬大屏尺寸 (max-w-[1800px])，讓左右兩側充分展開
+            const mainContainer = document.getElementById('main-container');
+            if (viewName === 'bigscreen') {
+                mainContainer.classList.remove('max-w-7xl', 'py-6', 'md:py-8');
+                mainContainer.classList.add('max-w-[1800px]', 'px-4', 'md:px-6', 'py-4');
+            } else {
+                mainContainer.classList.remove('max-w-[1800px]', 'py-4');
+                mainContainer.classList.add('max-w-7xl', 'py-6', 'md:py-8');
+            }
+
+            // 若離開大屏模式，自動恢復頂部導覽列與頁尾
+            if (viewName !== 'bigscreen' && state.isCleanProjector) {
+                state.isCleanProjector = false;
+                document.getElementById('top-navbar').classList.remove('hidden');
+                document.getElementById('bigscreen-header-bar').classList.remove('hidden');
+                document.getElementById('app-footer').classList.remove('hidden');
+                document.getElementById('clean-projector-bar').classList.add('hidden');
+            }
+
+            renderCurrentView();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // 點擊總覽作業卡片進入單科座號明細頁
+        window.openDetailView = function(hwId) {
+            state.selectedDetailHwId = hwId;
+            switchView('detail');
+        };
+
+        // 純淨投影模式切換 (隱藏工具列與頁尾，讓左右兩側大屏看板滿版呈現)
+        window.toggleCleanProjector = function() {
+            state.isCleanProjector = !state.isCleanProjector;
+            const topNav = document.getElementById('top-navbar');
+            const bsHeader = document.getElementById('bigscreen-header-bar');
+            const footer = document.getElementById('app-footer');
+            const floatBar = document.getElementById('clean-projector-bar');
+
+            if (state.isCleanProjector) {
+                topNav.classList.add('hidden');
+                bsHeader.classList.add('hidden');
+                footer.classList.add('hidden');
+                floatBar.classList.remove('hidden');
+            } else {
+                topNav.classList.remove('hidden');
+                bsHeader.classList.remove('hidden');
+                footer.classList.remove('hidden');
+                floatBar.classList.add('hidden');
+            }
+            if (state.currentView === 'bigscreen') renderBigScreenView();
+        };
+
+        window.exitCleanAndGoOverview = function() {
+            if (state.isCleanProjector) toggleCleanProjector();
+            switchView('overview');
+        };
+
+        // ---------------------------------------------------------
+        // 資料計算輔助函式
+        // ---------------------------------------------------------
+        function getPendingSeatsForHomework(hw) {
+            const pending = [];
+            for (let i = 1; i <= state.classSize; i++) {
+                if (!hw.seats || hw.seats[i] !== true) {
+                    pending.push(i);
+                }
+            }
+            return pending;
+        }
+
+        function formatSlashDate(dateStr) {
+            if (!dateStr) return '';
+            return dateStr.replace(/-/g, '/');
+        }
+
+        // ---------------------------------------------------------
+        // 新增 / 刪除 / 釘選 / 切換座號 Firestore 操作
+        // ---------------------------------------------------------
+        window.openAddModal = function() {
+            document.getElementById('hw-title').value = '';
+            document.getElementById('hw-pages').value = '';
+            document.getElementById('hw-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('add-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('hw-title').focus(), 60);
+        };
+
+        window.closeAddModal = function() {
+            document.getElementById('add-modal').classList.add('hidden');
+        };
+
+        window.quickFillTitle = function(prefix) {
+            const input = document.getElementById('hw-title');
+            input.value = prefix;
+            input.focus();
+        };
+
+        window.handleCreateHomework = async function(e) {
+            e.preventDefault();
+            if (!state.user || !state.db) return showToast('尚未連線至雲端資料庫', 'error');
+
+            const title = document.getElementById('hw-title').value.trim();
+            const pages = document.getElementById('hw-pages').value.trim();
+            const date = document.getElementById('hw-date').value;
+            const initStatus = document.querySelector('input[name="initial-status"]:checked').value;
+            const pinNow = document.getElementById('hw-pin-now').checked;
+
+            if (!title) return showToast('請輸入作業主名稱', 'warning');
+
+            const seats = {};
+            const defaultDone = initStatus === 'all_done';
+            for (let i = 1; i <= state.classSize; i++) {
+                seats[i] = defaultDone;
+            }
+
+            try {
+                // 若勾選立即加入大屏顯示，且目前已滿 2 項，自動取消最舊一項的釘選
+                if (pinNow) {
+                    const pinnedList = state.homeworks.filter(h => h.pinned);
+                    if (pinnedList.length >= 2) {
+                        const oldestPinned = pinnedList[pinnedList.length - 1];
+                        const oldRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, oldestPinned.id);
+                        await updateDoc(oldRef, { pinned: false });
+                    }
+                }
+
+                const newId = 'hw_' + Date.now();
+                const hwRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, newId);
+                await setDoc(hwRef, {
+                    title,
+                    pages,
+                    date,
+                    pinned: pinNow,
+                    seats,
+                    createdAt: Date.now()
+                });
+
+                closeAddModal();
+                showToast(`已新增「${title}」`, 'success');
+            } catch (err) {
+                console.error('新增作業失敗:', err);
+                showToast('新增作業失敗，請稍後再試', 'error');
+            }
+        };
+
+        window.togglePinHomework = async function(hwId, event) {
+            if (event) event.stopPropagation();
+            if (!state.user || !state.db) return;
+
+            const target = state.homeworks.find(h => h.id === hwId);
+            if (!target) return;
+
+            const nextPinned = !target.pinned;
+            try {
+                if (nextPinned) {
+                    const pinnedList = state.homeworks.filter(h => h.pinned && h.id !== hwId);
+                    if (pinnedList.length >= 2) {
+                        const oldestPinned = pinnedList[pinnedList.length - 1];
+                        const oldRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, oldestPinned.id);
+                        await updateDoc(oldRef, { pinned: false });
+                        showToast(`大屏最多 2 項，已自動替換「${oldestPinned.title}」`, 'info');
+                    }
+                }
+
+                const ref = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, hwId);
+                await updateDoc(ref, { pinned: nextPinned });
+                showToast(nextPinned ? `已將「${target.title}」加入大屏顯示` : `已取消大屏顯示「${target.title}」`, 'success');
+            } catch (err) {
+                console.error('更新大屏顯示失敗:', err);
+                showToast('切換顯示狀態失敗', 'error');
+            }
+        };
+
+        window.toggleDetailPin = function() {
+            if (state.selectedDetailHwId) {
+                togglePinHomework(state.selectedDetailHwId);
+            }
+        };
+
+        window.toggleSeatStatus = async function(hwId, seatNum, silent = false) {
+            if (!state.user || !state.db) return;
+            const target = state.homeworks.find(h => h.id === hwId);
+            if (!target) return;
+
+            const currentDone = target.seats && target.seats[seatNum] === true;
+            const nextDone = !currentDone;
+
+            try {
+                const ref = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, hwId);
+                await updateDoc(ref, { [`seats.${seatNum}`]: nextDone });
+                if (!silent) {
+                    showToast(`${seatNum}號「${target.title}」已標記為${nextDone ? '已訂正 ✓' : '未訂正'}`, nextDone ? 'success' : 'warning');
+                }
+            } catch (err) {
+                console.error('更新座號失敗:', err);
+                showToast('更新座號狀態失敗', 'error');
+            }
+        };
+
+        window.batchCurrentDetailSeats = async function(setAllDone) {
+            if (!state.user || !state.db || !state.selectedDetailHwId) return;
+            const target = state.homeworks.find(h => h.id === state.selectedDetailHwId);
+            if (!target) return;
+
+            const newSeats = {};
+            for (let i = 1; i <= state.classSize; i++) {
+                newSeats[i] = setAllDone;
+            }
+
+            try {
+                const ref = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, target.id);
+                await updateDoc(ref, { seats: newSeats });
+                showToast(setAllDone ? '已將全班設為已訂正' : '已將全班設為未訂正', 'info');
+            } catch (err) {
+                console.error('批次更新失敗:', err);
+                showToast('批次更新失敗', 'error');
+            }
+        };
+
+        let pendingDeleteHwId = null;
+
+        window.askDeleteHomework = function(hwId, event) {
+            if (event) event.stopPropagation();
+            const target = state.homeworks.find(h => h.id === hwId);
+            if (!target) return;
+
+            pendingDeleteHwId = hwId;
+            document.getElementById('confirm-title').textContent = `確定要刪除「${target.title}」嗎？`;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        };
+
+        window.askDeleteCurrentDetailHomework = function() {
+            if (state.selectedDetailHwId) {
+                askDeleteHomework(state.selectedDetailHwId);
+            }
+        };
+
+        window.closeConfirmModal = function() {
+            pendingDeleteHwId = null;
+            document.getElementById('confirm-modal').classList.add('hidden');
+        };
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', async () => {
+            if (!pendingDeleteHwId || !state.user || !state.db) return;
+            const deleteId = pendingDeleteHwId;
+            closeConfirmModal();
+
+            try {
+                const ref = doc(state.db, 'artifacts', state.appId, 'public', 'data', `room_${state.roomCode}_homeworks`, deleteId);
+                await deleteDoc(ref);
+                showToast('作業紀錄已刪除', 'success');
+                if (state.currentView === 'detail' && state.selectedDetailHwId === deleteId) {
+                    state.selectedDetailHwId = null;
+                    switchView('overview');
+                }
+            } catch (err) {
+                console.error('刪除作業失敗:', err);
+                showToast('刪除失敗，請稍後再試', 'error');
+            }
+        });
+
+        // ---------------------------------------------------------
+        // 視圖統一渲染調度
+        // ---------------------------------------------------------
+        function renderCurrentView() {
+            updateGlobalCounters();
+            if (state.currentView === 'overview') renderOverviewList();
+            else if (state.currentView === 'detail') renderDetailView();
+            else if (state.currentView === 'summary') renderSummaryView();
+            else if (state.currentView === 'bigscreen') renderBigScreenView();
+        }
+
+        function updateGlobalCounters() {
+            const pinnedCount = state.homeworks.filter(h => h.pinned).slice(0, 2).length;
+            const navPinned = document.getElementById('nav-pinned-count');
+            const ovPinned = document.getElementById('overview-pinned-count');
+            const totalHw = document.getElementById('total-hw-count');
+            if (navPinned) navPinned.textContent = pinnedCount;
+            if (ovPinned) ovPinned.textContent = pinnedCount;
+            if (totalHw) totalHw.textContent = state.homeworks.length;
+
+            // 計算全班有缺交的學生不重複人數
+            const studentsWithPending = new Set();
+            state.homeworks.forEach(hw => {
+                getPendingSeatsForHomework(hw).forEach(seat => studentsWithPending.add(seat));
+            });
+            const badge = document.getElementById('overview-pending-students-badge');
+            if (badge) badge.textContent = `${studentsWithPending.size}人`;
+        }
+
+        // ---------------------------------------------------------
+        // 渲染視圖 A：首頁「作業總覽」
+        // ---------------------------------------------------------
+        window.renderOverviewList = function() {
+            const listEl = document.getElementById('overview-list');
+            const keyword = (document.getElementById('overview-search')?.value || '').trim().toLowerCase();
+
+            const filtered = state.homeworks.filter(hw => {
+                if (!keyword) return true;
+                return (hw.title || '').toLowerCase().includes(keyword) ||
+                       (hw.pages || '').toLowerCase().includes(keyword) ||
+                       (hw.date || '').includes(keyword);
+            });
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="glass-panel rounded-3xl p-12 text-center">
+                        <i class="fa-solid fa-folder-open text-4xl text-sky-400/60 mb-3"></i>
+                        <p class="text-lg font-bold text-slate-300">目前沒有符合的作業紀錄</p>
+                        <p class="text-sm text-slate-400 mt-1">點擊右上角「新增作業」開始建立訂正項目！</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(hw => {
+                const pendingSeats = getPendingSeatsForHomework(hw);
+                const pendingCount = pendingSeats.length;
+                const isAllDone = pendingCount === 0;
+
+                return `
+                    <div onclick="openDetailView('${hw.id}')"
+                        class="overview-card glass-panel rounded-2xl px-5 py-4 cursor-pointer flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex flex-wrap items-center gap-4">
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2.5">
+                                    <h3 class="text-xl md:text-2xl font-black text-white">${hw.title}</h3>
+                                    ${hw.pages ? `<span class="px-2.5 py-0.5 rounded-lg bg-indigo-500/25 border border-indigo-400/40 text-indigo-200 text-xs font-bold">${hw.pages}</span>` : ''}
+                                </div>
+                                <div class="flex items-center gap-3 mt-1.5">
+                                    <span class="text-xs md:text-sm text-slate-400 font-bold">${formatSlashDate(hw.date)}</span>
+                                    ${isAllDone ? `
+                                        <span class="px-3 py-0.5 rounded-full bg-[#28c76f] text-white text-xs md:text-sm font-black">
+                                            全數完成 ✓
+                                        </span>
+                                    ` : `
+                                        <span class="px-3.5 py-0.5 rounded-full bg-[#facc15] text-slate-950 text-xs md:text-sm font-black shadow">
+                                            ${pendingCount} 人未訂正
+                                        </span>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button onclick="togglePinHomework('${hw.id}', event)"
+                                class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold border transition flex items-center gap-1.5 ${hw.pinned ? 'bg-sky-500/25 border-sky-400 text-sky-200 shadow-inner' : 'bg-slate-800/90 border-slate-600 text-slate-300 hover:bg-slate-700'}">
+                                <i class="fa-solid fa-tv"></i>
+                                <span>${hw.pinned ? '大屏顯示中' : '加入大屏'}</span>
+                            </button>
+
+                            <button onclick="askDeleteHomework('${hw.id}', event)" title="刪除此作業"
+                                class="w-9 h-9 rounded-xl bg-slate-800/90 hover:bg-rose-600/80 border border-slate-700 hover:border-rose-400 text-slate-400 hover:text-white transition flex items-center justify-center">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // ---------------------------------------------------------
+        // 渲染視圖 D：單科座號訂正明細頁
+        // ---------------------------------------------------------
+        function renderDetailView() {
+            const hw = state.homeworks.find(h => h.id === state.selectedDetailHwId);
+            if (!hw) {
+                switchView('overview');
+                return;
+            }
+
+            const pendingSeats = getPendingSeatsForHomework(hw);
+            const pendingCount = pendingSeats.length;
+
+            document.getElementById('detail-hw-title').textContent = hw.title;
+            const pagesEl = document.getElementById('detail-hw-pages');
+            if (hw.pages) {
+                pagesEl.textContent = hw.pages;
+                pagesEl.classList.remove('hidden');
+            } else {
+                pagesEl.classList.add('hidden');
+            }
+            document.getElementById('detail-hw-date').textContent = formatSlashDate(hw.date);
+
+            const badgeEl = document.getElementById('detail-hw-badge');
+            if (pendingCount === 0) {
+                badgeEl.className = 'px-3.5 py-1 rounded-full text-xs md:text-sm font-black bg-[#28c76f] text-white';
+                badgeEl.textContent = '全數完成 ✓';
+            } else {
+                badgeEl.className = 'px-3.5 py-1 rounded-full text-xs md:text-sm font-black bg-[#facc15] text-slate-950';
+                badgeEl.textContent = `${pendingCount} 人未訂正`;
+            }
+
+            const pinBtn = document.getElementById('detail-pin-btn');
+            const pinText = document.getElementById('detail-pin-text');
+            if (hw.pinned) {
+                pinBtn.className = 'px-4 py-2.5 rounded-xl font-bold text-sm border transition flex items-center gap-2 bg-sky-500/25 border-sky-400 text-sky-200';
+                pinText.textContent = '大屏顯示中';
+            } else {
+                pinBtn.className = 'px-4 py-2.5 rounded-xl font-bold text-sm border transition flex items-center gap-2 bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700';
+                pinText.textContent = '加入大屏顯示';
+            }
+
+            const grid = document.getElementById('detail-seats-grid');
+            let html = '';
+            for (let i = 1; i <= state.classSize; i++) {
+                const isDone = hw.seats && hw.seats[i] === true;
+                html += `
+                    <button onclick="toggleSeatStatus('${hw.id}', ${i})"
+                        class="seat-btn relative py-3.5 md:py-4 rounded-xl font-black text-base md:text-xl flex items-center justify-center ${isDone ? 'seat-done' : 'seat-pending'}">
+                        <span>${i}號</span>
+                        ${isDone ? `<i class="fa-solid fa-check absolute top-1.5 right-2 text-xs text-white"></i>` : ''}
+                    </button>
+                `;
+            }
+            grid.innerHTML = html;
+        }
+
+        // ---------------------------------------------------------
+        // 渲染視圖 B：「查看總訂正名單」彙整看板
+        // ---------------------------------------------------------
+        function renderSummaryView() {
+            const grid = document.getElementById('summary-students-grid');
+            const studentMap = new Map();
+
+            for (let i = 1; i <= state.classSize; i++) {
+                const pendingHws = state.homeworks.filter(hw => !hw.seats || hw.seats[i] !== true);
+                if (pendingHws.length > 0) {
+                    studentMap.set(i, pendingHws);
+                }
+            }
+
+            document.getElementById('summary-total-badge').textContent = `共 ${studentMap.size} 人尚有未訂正`;
+
+            if (studentMap.size === 0) {
+                grid.className = 'grid grid-cols-1';
+                grid.innerHTML = `
+                    <div class="glass-panel rounded-3xl p-14 text-center">
+                        <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3 text-3xl">
+                            <i class="fa-solid fa-award"></i>
+                        </div>
+                        <h2 class="text-2xl font-black text-white">太棒了！全班所有作業皆已訂正完成！</h2>
+                        <p class="text-slate-400 mt-1">目前沒有任何待訂正項目。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+            let cardsHtml = '';
+            studentMap.forEach((hws, seatNum) => {
+                const tagsHtml = hws.map(hw => `
+                    <button onclick="toggleSeatStatus('${hw.id}', ${seatNum})" title="點擊直接標記為已訂正"
+                        class="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/20 hover:bg-emerald-600 border border-orange-400/50 hover:border-emerald-400 text-orange-200 hover:text-white text-xs md:text-sm font-bold transition">
+                        <span>${hw.title}${hw.pages ? ` (${hw.pages})` : ''}</span>
+                        <i class="fa-solid fa-check opacity-60 group-hover:opacity-100"></i>
+                    </button>
+                `).join('');
+
+                cardsHtml += `
+                    <div class="glass-panel rounded-2xl p-5 border border-orange-400/35 flex flex-col justify-between">
+                        <div class="flex items-center justify-between border-b border-slate-700/80 pb-3 mb-3">
+                            <span class="text-2xl font-black text-white">${seatNum}號</span>
+                            <span class="px-3 py-0.5 rounded-full bg-orange-500 text-white text-xs font-black">
+                                缺 ${hws.length} 項
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${tagsHtml}
+                        </div>
+                    </div>
+                `;
+            });
+            grid.innerHTML = cardsHtml;
+        }
+
+        // ---------------------------------------------------------
+        // 渲染視圖 C：「教室大屏雙欄展示模式」 (最多同時顯示 2 種作業，左右兩側並排)
+        // ---------------------------------------------------------
+        function renderBigScreenView() {
+            const grid = document.getElementById('bigscreen-grid');
+            const pinnedHws = state.homeworks.filter(h => h.pinned).slice(0, 2);
+
+            if (pinnedHws.length === 0) {
+                grid.className = 'grid grid-cols-1 flex-1';
+                grid.innerHTML = `
+                    <div class="glass-panel rounded-3xl p-14 text-center flex flex-col items-center justify-center">
+                        <i class="fa-solid fa-tv text-5xl text-sky-400/60 mb-4"></i>
+                        <h2 class="text-2xl font-black text-white mb-2">目前尚未選擇要顯示在大屏的作業</h2>
+                        <p class="text-slate-400 mb-6">請返回「作業總覽」，點擊作業卡片右側的「加入大屏」（最多可同時選 2 項）。</p>
+                        <button onclick="switchView('overview')" class="px-6 py-3 rounded-2xl bg-[#0ea5e9] hover:bg-[#38bdf8] text-white font-black shadow-lg">
+                            前往作業總覽勾選
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            const isDual = pinnedHws.length === 2;
+            const panelHeightClass = state.isCleanProjector
+                ? 'min-h-[calc(100vh-48px)]'
+                : 'min-h-[calc(100vh-165px)]';
+
+            // 僅 1 項時置中放大；2 項時嚴格左右兩側並排 (grid-cols-2，左側 50% / 右側 50%)
+            if (!isDual) {
+                grid.className = 'grid grid-cols-1 max-w-4xl mx-auto w-full flex-1 items-stretch';
+            } else {
+                grid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 w-full flex-1 items-stretch';
+            }
+
+            grid.innerHTML = pinnedHws.map((hw, idx) => {
+                const pendingSeats = getPendingSeatsForHomework(hw);
+                const pendingCount = pendingSeats.length;
+                const isAllClear = pendingCount === 0;
+                const sideLabel = isDual ? (idx === 0 ? '左側看板' : '右側看板') : '';
+
+                let seatsHtml = '';
+                for (let i = 1; i <= state.classSize; i++) {
+                    const isDone = hw.seats && hw.seats[i] === true;
+                    const btnSizeClass = isDual
+                        ? 'py-2.5 md:py-3.5 text-base md:text-lg xl:text-xl'
+                        : 'py-4 md:py-5 text-lg md:text-2xl';
+                    seatsHtml += `
+                        <button onclick="toggleSeatStatus('${hw.id}', ${i}, true)"
+                            class="seat-btn relative ${btnSizeClass} rounded-xl font-black flex items-center justify-center ${isDone ? 'seat-done' : 'seat-pending'}">
+                            <span>${i}號</span>
+                            ${isDone ? `<i class="fa-solid fa-check absolute top-1.5 right-1.5 text-[11px] text-white"></i>` : ''}
+                        </button>
+                    `;
+                }
+
+                // 雙欄左右並排時使用 6 欄（每排 6 人，30 人僅需 5 列，高度更緊湊不需捲動），單欄時使用 7 欄
+                const seatGridColsClass = isDual
+                    ? 'grid-cols-5 md:grid-cols-6 gap-2 md:gap-2.5'
+                    : 'grid-cols-5 sm:grid-cols-7 gap-3 md:gap-4';
+
+                return `
+                    <article class="glass-panel ${panelHeightClass} rounded-3xl p-4 md:p-6 border ${isAllClear ? 'border-emerald-400/50' : 'border-sky-400/45'} flex flex-col justify-between">
+                        <!-- 看板頂部作業標題與未訂正人數 -->
+                        <div class="flex flex-wrap items-center justify-between gap-2.5 mb-3 pb-3 border-b border-slate-700/80">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    ${sideLabel ? `<span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[11px] font-black">${sideLabel}</span>` : ''}
+                                    <span class="text-xs md:text-sm font-bold text-slate-300">${formatSlashDate(hw.date)}</span>
+                                    ${hw.pages ? `<span class="px-2.5 py-0.5 rounded-lg bg-indigo-500/30 border border-indigo-400/40 text-indigo-200 text-xs font-bold">${hw.pages}</span>` : ''}
+                                </div>
+                                <h2 class="text-2xl md:text-3xl font-black text-white tracking-wide">${hw.title}</h2>
+                            </div>
+
+                            <div>
+                                ${isAllClear ? `
+                                    <span class="px-4 py-1.5 rounded-full bg-[#28c76f] text-white font-black text-sm md:text-base shadow-lg">
+                                        全數完成 ✓
+                                    </span>
+                                ` : `
+                                    <span class="px-4 py-1.5 rounded-full bg-[#facc15] text-slate-950 font-black text-sm md:text-base shadow-lg">
+                                        剩餘 ${pendingCount} 人未訂正
+                                    </span>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- 全班座號高對比網格 (左右並排時自動調整為緊湊 6 欄，全班一屏看完) -->
+                        <div class="bg-slate-950/65 p-3 md:p-4 rounded-2xl border border-slate-800 flex-1 flex flex-col justify-center">
+                            <div class="grid ${seatGridColsClass}">
+                                ${seatsHtml}
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        // 啟動應用程式
+        window.addEventListener('DOMContentLoaded', () => {
+            initUIControls();
+            initFirebase();
+        });
+    </script>
+</body>
+</html>
